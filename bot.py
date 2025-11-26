@@ -1,4 +1,4 @@
-# bot.py - نسخه نهایی با دکمه بازگشت تمیز + بدون لقب + 30 ثانیه
+# bot.py - نسخه ۲۰+ سازگار با python-telegram-bot[job-queue]==20.8
 import os
 import json
 import asyncio
@@ -12,7 +12,6 @@ from telegram.ext import (
     CallbackQueryHandler,
     ContextTypes,
     filters,
-    CallbackContext,
 )
 
 # فقط این دو خط رو عوض کن!
@@ -44,26 +43,21 @@ def load_admins():
     return set(admins)
 
 def is_admin(uid): return uid in load_admins()
-
 def load_scores(): return load_json(SCORES_FILE)
 def save_scores(d): save_json(SCORES_FILE, d)
-
 def load_groups():
     groups = load_json(GROUPS_FILE)
     return groups if isinstance(groups, list) else []
-
 def save_groups(g): save_json(GROUPS_FILE, g)
-
 def get_name(user):
     return f"@{user.username}" if user.username else user.full_name
 
 # --- پاک کردن پیام بعد 30 ثانیه ---
-async def delete_after_30(context: CallbackContext, message):
+async def delete_after_30(message):
     await asyncio.sleep(30)
     try:
         await message.delete()
-    except:
-        pass
+    except: pass
 
 # --- پنل اصلی ---
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -83,7 +77,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("پاک کردن همه امتیازات", callback_data="panel_resetall")]
     ]
     msg = await message.reply_text("پنل ادمین:", reply_markup=InlineKeyboardMarkup(keyboard))
-    context.job_queue.run_once(lambda ctx: asyncio.create_task(delete_after_30(ctx, msg)), when=30)
+    asyncio.create_task(delete_after_30(msg))
 
 # --- صفحه امتیاز دهی ---
 async def open_score_panel(query):
@@ -113,7 +107,6 @@ async def back_to_main_panel(query):
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-
     if not query.message.reply_to_message:
         await query.edit_message_text("پیام اصلی حذف شده!")
         return
@@ -122,13 +115,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target_id = str(target_user.id)
     data = query.data
 
-    # --- بازگشت ---
     if data == "back_to_main":
         await back_to_main_panel(query)
-        context.job_queue.run_once(lambda ctx: asyncio.create_task(delete_after_30(ctx, query.message)), when=30)
+        asyncio.create_task(delete_after_30(query.message))
         return
 
-    # --- امتیاز دلخواه ---
     if data == "score_custom":
         msg = await query.message.reply_text(
             "عدد رو وارد کن (مثلاً +150 یا -80):",
@@ -137,12 +128,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.application.bot_data[f"custom_{msg.message_id}"] = target_user
         return
 
-    # --- امتیاز ثابت ---
     if data.startswith("score_") and data not in ["score_custom", "score_back"]:
-        try:
-            amount = int(data.split("_")[1])
-        except:
-            return
+        try: amount = int(data.split("_")[1])
+        except: return
 
         scores = load_scores()
         if target_id not in scores:
@@ -155,22 +143,20 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg_text = f"این پیام {amount:+} امتیاز گرفت!\n\nامتیاز کل: {scores[target_id]['score']}"
         keyboard = [[InlineKeyboardButton("بازگشت", callback_data="back_to_main")]]
         await query.edit_message_text(msg_text, reply_markup=InlineKeyboardMarkup(keyboard))
-        context.job_queue.run_once(lambda ctx: asyncio.create_task(delete_after_30(ctx, query.message)), when=30)
+        asyncio.create_task(delete_after_30(query.message))
         return
 
-    # --- باز کردن صفحه امتیاز دهی ---
     if data == "panel_score":
         await open_score_panel(query)
-        context.job_queue.run_once(lambda ctx: asyncio.create_task(delete_after_30(ctx, query.message)), when=30)
+        asyncio.create_task(delete_after_30(query.message))
         return
 
-    # --- نمایش امتیازات ---
     if data == "panel_scores":
         scores_data = load_scores()
         if not scores_data:
             keyboard = [[InlineKeyboardButton("بازگشت", callback_data="back_to_main")]]
             await query.edit_message_text("هنوز امتیازی ثبت نشده", reply_markup=InlineKeyboardMarkup(keyboard))
-            context.job_queue.run_once(lambda ctx: asyncio.create_task(delete_after_30(ctx, query.message)), when=30)
+            asyncio.create_task(delete_after_30(query.message))
             return
 
         sorted_data = sorted(scores_data.items(), key=lambda x: x[1]["score"], reverse=True)
@@ -181,23 +167,22 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         keyboard = [[InlineKeyboardButton("بازگشت", callback_data="back_to_main")]]
         await query.edit_message_text(text.strip(), reply_markup=InlineKeyboardMarkup(keyboard))
-        context.job_queue.run_once(lambda ctx: asyncio.create_task(delete_after_30(ctx, query.message)), when=30)
+        asyncio.create_task(delete_after_30(query.message))
         return
 
-    # --- ادمین و پاکسازی ---
     if data == "panel_addadmin":
         admins = load_admins()
         admins.add(target_user.id)
         save_json(ADMINS_FILE, list(admins))
         keyboard = [[InlineKeyboardButton("بازگشت", callback_data="back_to_main")]]
         await query.edit_message_text(f"{get_name(target_user)} حالا ادمینه", reply_markup=InlineKeyboardMarkup(keyboard))
-        context.job_queue.run_once(lambda ctx: asyncio.create_task(delete_after_30(ctx, query.message)), when=30)
+        asyncio.create_task(delete_after_30(query.message))
 
     elif data == "panel_removeadmin":
         if target_user.id == YOUR_ID:
             keyboard = [[InlineKeyboardButton("بازگشت", callback_data="back_to_main")]]
             await query.edit_message_text("نمی‌تونی صاحب اصلی رو حذف کنی!", reply_markup=InlineKeyboardMarkup(keyboard))
-            context.job_queue.run_once(lambda ctx: asyncio.create_task(delete_after_30(ctx, query.message)), when=30)
+            asyncio.create_task(delete_after_30(query.message))
             return
         admins = load_admins()
         if target_user.id in admins:
@@ -208,14 +193,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             keyboard = [[InlineKeyboardButton("بازگشت", callback_data="back_to_main")]]
             await query.edit_message_text("این کاربر ادمین نبود", reply_markup=InlineKeyboardMarkup(keyboard))
-        context.job_queue.run_once(lambda ctx: asyncio.create_task(delete_after_30(ctx, query.message)), when=30)
+        asyncio.create_task(delete_after_30(query.message))
 
     elif data == "panel_resetall":
-        if os.path.exists(SCORES_FILE):
-            os.remove(SCORES_FILE)
+        if os.path.exists(SCORES_FILE): os.remove(SCORES_FILE)
         keyboard = [[InlineKeyboardButton("بازگشت", callback_data="back_to_main")]]
         await query.edit_message_text("همه امتیازات پاک شد!", reply_markup=InlineKeyboardMarkup(keyboard))
-        context.job_queue.run_once(lambda ctx: asyncio.create_task(delete_after_30(ctx, query.message)), when=30)
+        asyncio.create_task(delete_after_30(query.message))
 
 # --- ورودی امتیاز دلخواه ---
 async def custom_score_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -224,12 +208,10 @@ async def custom_score_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     reply_msg_id = update.message.reply_to_message.message_id
     target_user = context.application.bot_data.get(f"custom_{reply_msg_id}")
-    if not target_user:
-        return
+    if not target_user: return
 
     text = update.message.text.strip().lstrip("+")
-    try:
-        amount = int("-" + text) if text.startswith("-") else int(text)
+    try: amount = int("-" + text) if text.startswith("-") else int(text)
     except:
         await update.message.reply_text("عدد معتبر وارد کن! (مثلاً +150 یا -80)")
         return
@@ -254,9 +236,7 @@ async def custom_score_input(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def scores_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type == "private": return
     data = load_scores()
-    if not data:
-        await update.message.reply_text("هنوز امتیازی ثبت نشده")
-        return
+    if not data: await update.message.reply_text("هنوز امتیازی ثبت نشده"); return
     sorted_data = sorted(data.items(), key=lambda x: x[1]["score"], reverse=True)
     text = "تابلوی امتیازات\n\n"
     for i, (uid, info) in enumerate(sorted_data[:30], 1):
@@ -265,7 +245,7 @@ async def scores_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text.strip())
 
 # --- جایزه شبانه ---
-async def nightly_job(context: CallbackContext):
+async def nightly_job(context: ContextTypes.DEFAULT_TYPE):
     scores = load_scores()
     today = {k: v.get("daily", 0) for k, v in scores.items() if v.get("daily", 0) > 0}
     if not today: return
@@ -277,12 +257,10 @@ async def nightly_job(context: CallbackContext):
         scores[uid]["score"] += reward
         name = f"@{scores[uid].get('username')}" if scores[uid].get('username') else scores[uid].get('name', 'ناشناس')
         msg += f"{i+1}. {name} +{reward} جایزه\n"
-    for uid in scores:
-        scores[uid]["daily"] = 0
+    for uid in scores: scores[uid]["daily"] = 0
     save_scores(scores)
     for chat_id in load_groups():
-        try:
-            await context.bot.send_message(int(chat_id), msg)
+        try: await context.bot.send_message(int(chat_id), msg)
         except: pass
 
 # --- اجرا ---
