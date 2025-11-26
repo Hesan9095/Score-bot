@@ -2,12 +2,12 @@ services:
   - type: web
     name: score-bot
     env: python
-    region: oregon        # یا singapore یا هر جا که می‌خوای
-    plan: free            # رایگان
+    region: oregon  # یا frankfurt یا هر جا که می‌خوای
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: python bot.py
     autoDeploy: true
 
-    # متغیرهای محیطی (اینجا جدا تعریف می‌شه)
-    envVars:
-      PYTHON_VERSION: "3.11.6"
+envVars:
+  - key: PYTHON_VERSION
+    value: 3.11.6  # بدون نقل قول! (Render خودش هندل می‌کنه)
